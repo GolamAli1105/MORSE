@@ -12,11 +12,14 @@ Complete pipeline with:
 import asyncio
 import logging
 import os
-from fastapi import FastAPI, HTTPException, BackgroundTasks
+from fastapi import FastAPI, HTTPException, BackgroundTasks, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse, JSONResponse
 from pydantic import BaseModel
 from typing import Optional, Dict, Any, List
 import uvicorn
+import json
+from datetime import datetime
 
 # Configuration
 from config import Config
@@ -44,13 +47,21 @@ app = FastAPI(
     version="2.0.0"
 )
 
-# CORS
+# CORS - Properly configured for frontend
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=[
+        "http://localhost:5173",  # Vite default dev server
+        "http://localhost:3000",  # Alternative React port
+        "http://127.0.0.1:5173",
+        "http://127.0.0.1:3000",
+        "*"  # Allow all for development (remove in production)
+    ],
     allow_credentials=True,
-    allow_methods=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
     allow_headers=["*"],
+    expose_headers=["*"],
+    max_age=3600,
 )
 
 # Initialize components
@@ -70,6 +81,35 @@ music_gen = MusicGenerator(Config.get_model_config("music"))
 text_gen = TextGenerator(Config.get_model_config("text"))
 
 logger.info("✅ All components initialized")
+
+
+# WebSocket Connection Manager for Real-time Updates
+class ConnectionManager:
+    """Manages WebSocket connections for real-time updates"""
+    
+    def __init__(self):
+        self.active_connections: List[WebSocket] = []
+    
+    async def connect(self, websocket: WebSocket):
+        await websocket.accept()
+        self.active_connections.append(websocket)
+        logger.info(f"✅ WebSocket connected. Total connections: {len(self.active_connections)}")
+    
+    def disconnect(self, websocket: WebSocket):
+        self.active_connections.remove(websocket)
+        logger.info(f"❌ WebSocket disconnected. Total connections: {len(self.active_connections)}")
+    
+    async def send_personal_message(self, message: dict, websocket: WebSocket):
+        await websocket.send_json(message)
+    
+    async def broadcast(self, message: dict):
+        for connection in self.active_connections:
+            try:
+                await connection.send_json(message)
+            except:
+                pass
+
+manager = ConnectionManager()
 
 
 # Request/Response Models
@@ -402,8 +442,173 @@ async def health_check():
     return {
         "status": "healthy",
         "version": "2.0.0",
-        "features": ["RAG", "MongoDB", "Fine-tuning", "Multi-modal"]
+        "features": ["RAG", "MongoDB", "Fine-tuning", "Multi-modal", "WebSocket", "Streaming"]
     }
+
+
+@app.websocket("/ws")
+async def websocket_endpoint(websocket: WebSocket):
+    """
+    WebSocket endpoint for real-time updates
+    
+    Sends real-time updates about:
+    - Generation progress
+    - Fine-tuning status
+    - System notifications
+    """
+    await manager.connect(websocket)
+    try:
+        while True:
+            # Receive messages from client
+            data = await websocket.receive_text()
+            message = json.loads(data)
+            
+            # Echo back with timestamp
+            response = {
+                "type": "echo",
+                "data": message,
+                "timestamp": datetime.now().isoformat()
+            }
+            await manager.send_personal_message(response, websocket)
+            
+    except WebSocketDisconnect:
+        manager.disconnect(websocket)
+    except Exception as e:
+        logger.error(f"WebSocket error: {e}")
+        manager.disconnect(websocket)
+
+
+@app.post("/generate/stream")
+async def generate_content_stream(request: GenerateRequest):
+    """
+    Generate content with streaming response for real-time updates
+    
+    Returns a stream of JSON objects showing generation progress
+    """
+    async def generate_stream():
+        try:
+            # Send start event
+            yield json.dumps({
+                "event": "start",
+                "message": "Starting generation...",
+                "timestamp": datetime.now().isoformat()
+            }) + "\n"
+            
+            # RAG Enhancement
+            if request.use_rag:
+                yield json.dumps({
+                    "event": "rag",
+                    "message": "Enhancing prompt with RAG...",
+                    "timestamp": datetime.now().isoformat()
+                }) + "\n"
+                
+                rag_result = rag_engine.enhance_prompt_with_rag(
+                    user_id=request.user_id,
+                    modality=request.modality,
+                    prompt=request.prompt,
+                    style=request.style
+                )
+                enhanced_prompt = rag_result['enhanced_prompt']
+                
+                yield json.dumps({
+                    "event": "rag_complete",
+                    "message": f"RAG enhanced with {rag_result.get('reference_count', 0)} references",
+                    "timestamp": datetime.now().isoformat()
+                }) + "\n"
+            else:
+                enhanced_prompt = request.prompt
+            
+            # Generation
+            yield json.dumps({
+                "event": "generating",
+                "message": f"Generating {request.modality} content...",
+                "timestamp": datetime.now().isoformat()
+            }) + "\n"
+            
+            # Generate based on modality
+            if request.modality == "image":
+                result = await image_gen.generate(
+                    prompt=enhanced_prompt,
+                    style=request.style,
+                    **request.parameters
+                )
+            elif request.modality == "music":
+                result = await music_gen.generate(
+                    prompt=enhanced_prompt,
+                    style=request.style,
+                    **request.parameters
+                )
+            elif request.modality == "text":
+                result = await text_gen.generate(
+                    prompt=enhanced_prompt,
+                    style=request.style,
+                    **request.parameters
+                )
+            else:
+                raise ValueError("Invalid modality")
+            
+            # Store in MongoDB
+            yield json.dumps({
+                "event": "storing",
+                "message": "Storing content...",
+                "timestamp": datetime.now().isoformat()
+            }) + "\n"
+            
+            content_id = mongo.store_generated_content(
+                user_id=request.user_id,
+                modality=request.modality,
+                prompt=request.prompt,
+                content=result.get('image_data') or result.get('audio_data') or result.get('text'),
+                metadata={
+                    'style': request.style,
+                    'parameters': result.get('parameters', {}),
+                    'model_used': result.get('model_used'),
+                    'generation_time': result.get('generation_time'),
+                    'rag_used': request.use_rag
+                }
+            )
+            
+            # Track in SQLite
+            session_id = db.create_chat_session(request.user_id, f"{request.modality} generation")
+            generation_id = feedback_collector.track_generation(
+                user_id=request.user_id,
+                session_id=session_id,
+                modality=request.modality,
+                prompt=request.prompt,
+                content=result.get('image_data') or result.get('audio_data') or result.get('text'),
+                style=request.style,
+                model_used=result.get('model_used'),
+                generation_params=result.get('parameters', {})
+            )
+            
+            # Send complete event with result
+            yield json.dumps({
+                "event": "complete",
+                "message": "Generation complete!",
+                "data": {
+                    **result,
+                    "generation_id": generation_id,
+                    "content_id": content_id,
+                    "session_id": session_id
+                },
+                "timestamp": datetime.now().isoformat()
+            }) + "\n"
+            
+        except Exception as e:
+            yield json.dumps({
+                "event": "error",
+                "message": str(e),
+                "timestamp": datetime.now().isoformat()
+            }) + "\n"
+    
+    return StreamingResponse(
+        generate_stream(),
+        media_type="application/x-ndjson",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no"
+        }
+    )
 
 
 @app.on_event("shutdown")
