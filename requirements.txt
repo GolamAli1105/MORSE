@@ -1,0 +1,56 @@
+# Core Python Dependencies
+# =======================
+
+# Data Processing & Visualization
+pandas>=2.0.0
+numpy>=1.24.0
+plotly>=5.17.0
+
+# Deep Learning Framework (CPU-optimized)
+--extra-index-url https://download.pytorch.org/whl/cpu
+torch>=2.1.0
+torchvision>=0.16.0
+torchaudio>=2.1.0
+
+# Hugging Face Transformers & AI Models
+transformers==4.37.2
+tokenizers>=0.15.0
+safetensors>=0.4.0
+accelerate==0.25.0
+optimum>=1.16.0
+
+# Image Generation
+diffusers==0.24.0
+Pillow>=10.0.0
+
+# Audio Processing
+scipy>=1.11.0
+
+# Additional AI Dependencies
+einops>=0.7.0
+sentencepiece>=0.1.99
+transformers_stream_generator==0.0.4
+
+# API & Backend
+fastapi>=0.104.0
+uvicorn[standard]>=0.24.0
+pydantic>=2.0.0
+aiofiles>=23.0.0
+
+# Database
+sqlite3  # Built-in with Python
+
+# Utilities
+requests>=2.31.0
+python-dotenv>=1.0.0
+nest_asyncio>=1.6.0
+
+# Development & Testing
+pytest>=7.4.0
+pytest-asyncio>=0.21.0
+
+# Optional: Performance Monitoring
+psutil>=5.9.0
+
+# Optional: Better logging
+colorlog>=6.7.0
