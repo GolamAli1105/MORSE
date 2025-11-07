@@ -1,4 +1,3 @@
-# core/rag_engine.py
 """
 RAG (Retrieval-Augmented Generation) Engine
 ============================================

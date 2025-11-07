@@ -1,4 +1,3 @@
-# core/mongodb_manager.py
 """
 MongoDB Manager for RAG Content Storage
 ========================================

@@ -1,4 +1,3 @@
-# test_pipeline.py
 """
 Pipeline Testing Script
 =======================

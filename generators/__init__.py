@@ -1,4 +1,3 @@
-# generators/__init__.py
 """
 Generators module for multi-modal content generation
 """
