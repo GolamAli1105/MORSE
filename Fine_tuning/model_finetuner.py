@@ -13,7 +13,7 @@ from pathlib import Path
 import json
 
 from core.database import DatabaseManager
-from implicit_feedback_collector import ImplicitFeedbackDatasetBuilder
+from .implicit_feedback_collector import ImplicitFeedbackDatasetBuilder
 
 logger = logging.getLogger(__name__)
 
