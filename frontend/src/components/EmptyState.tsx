@@ -22,23 +22,13 @@ export default function EmptyState({
       icon: Palette,
       color: 'text-cyan-400',
       title: 'Design Assistant',
-      suggestions: [
-        'Explain the principles of good UI design',
-        'How do I choose a color palette?',
-        'What are current design trends?',
-        'Tips for creating a logo',
-      ],
+      suggestions: [],
     },
     writing: {
       icon: PenTool,
       color: 'text-green-400',
       title: 'Writing Assistant',
-      suggestions: [
-        'Help me brainstorm story ideas',
-        'How to write compelling characters',
-        'Tips for improving my writing style',
-        'Structure for a blog post',
-      ],
+      suggestions: [],
     },
   };
 
@@ -54,7 +44,7 @@ export default function EmptyState({
             <div className="absolute inset-0 blur-2xl opacity-30 bg-blue-500"></div>
           </div>
           <h2 className="text-4xl font-bold text-white mb-2">
-            COSMOS {current.title}
+            CoLab {current.title}
           </h2>
           <p className="text-slate-400">
             Ask me anything about {category}. I'm here to help!

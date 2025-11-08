@@ -10,7 +10,6 @@ import { SignupPage } from './pages/SignupPage';
 import { ForgotPasswordPage } from './pages/ForgotPasswordPage';
 import { ResetPasswordPage } from './pages/ResetPasswordPage';
 import { AuthCallback } from './pages/AuthCallback';
-import { ConnectionTest } from './components/ConnectionTest';
 
 interface Message {
   id: string;
@@ -30,19 +29,56 @@ interface Conversation {
 function App() {
   const { user, loading: authLoading } = useAuth();
   const [loading, setLoading] = useState(true);
-  const [selectedCategory, setSelectedCategory] = useState('music');
-  const [conversations, setConversations] = useState<Conversation[]>([]);
-  const [currentConversationId, setCurrentConversationId] = useState<string | null>(null);
+  const [selectedCategory, setSelectedCategory] = useState(() => {
+    const saved = localStorage.getItem('selectedCategory');
+    return saved || 'music';
+  });
+  const [conversations, setConversations] = useState<Conversation[]>(() => {
+    const saved = localStorage.getItem('conversations');
+    return saved ? JSON.parse(saved) : [];
+  });
+  const [currentConversationId, setCurrentConversationId] = useState<string | null>(() => {
+    const saved = localStorage.getItem('currentConversationId');
+    return saved || null;
+  });
   const [isTyping, setIsTyping] = useState(false);
   const [authPage, setAuthPage] = useState<'none' | 'login' | 'signup' | 'forgot-password'>('none');
 
   const [expandedInput, setExpandedInput] = useState(false); // design/writing input
   const [musicInputActive, setMusicInputActive] = useState(false); // music input
   const [resetTrigger, setResetTrigger] = useState(0); // triggers ChatInput reset
+  const [isSidebarOpen, setIsSidebarOpen] = useState(true); // sidebar state
 
   const currentConversation = conversations.find(c => c.id === currentConversationId);
 
   const handleLoadingComplete = () => setLoading(false);
+
+  // Save conversations to localStorage whenever they change
+  useEffect(() => {
+    localStorage.setItem('conversations', JSON.stringify(conversations));
+  }, [conversations]);
+
+  // Save selectedCategory to localStorage whenever it changes
+  useEffect(() => {
+    localStorage.setItem('selectedCategory', selectedCategory);
+  }, [selectedCategory]);
+
+  // Save currentConversationId to localStorage whenever it changes
+  useEffect(() => {
+    if (currentConversationId) {
+      localStorage.setItem('currentConversationId', currentConversationId);
+    } else {
+      localStorage.removeItem('currentConversationId');
+    }
+  }, [currentConversationId]);
+
+  // Restore musicInputActive state on mount
+  useEffect(() => {
+    if (currentConversation && selectedCategory === 'music') {
+      const shouldEnable = currentConversation.messages.length > 0 || (currentConversation.musicInputUnlocked ?? false);
+      setMusicInputActive(shouldEnable);
+    }
+  }, [currentConversation, selectedCategory]);
 
   const handleNewChat = () => {
     const newConv: Conversation = {
@@ -58,7 +94,7 @@ function App() {
     setCurrentConversationId(newConv.id);
 
     if (selectedCategory === 'music') {
-      setMusicInputActive(true);
+      setMusicInputActive(false);
     } else {
       setExpandedInput(true);
     }
@@ -87,14 +123,33 @@ function App() {
   // ---------------------------
   // Handle sending messages
   // ---------------------------
-  const handleSendMessage = async (content: string) => {
-    if (!currentConversationId || !user) return;
+  const handleSendMessage = async (content: string, convId?: string) => {
+    if (!user) return;
+    
+    let targetConvId = convId || currentConversationId;
+    
+    // If no conversation exists, create one
+    if (!targetConvId) {
+      const newConvId = Date.now().toString();
+      const newConv: Conversation = {
+        id: newConvId,
+        title: 'New Chat',
+        category: selectedCategory,
+        messages: [],
+        musicInputUnlocked: selectedCategory !== 'music',
+        selectedMusicOption: null,
+      };
+      
+      setConversations(prev => [newConv, ...prev]);
+      setCurrentConversationId(newConvId);
+      targetConvId = newConvId;
+    }
 
     const userMessage: Message = { id: Date.now().toString(), role: 'user', content };
 
     setConversations(prev =>
       prev.map(conv => {
-        if (conv.id === currentConversationId) {
+        if (conv.id === targetConvId) {
           const updatedMessages = [...conv.messages, userMessage];
 
           // Auto-update title if it's still default
@@ -154,8 +209,12 @@ function App() {
 
       setConversations(prev =>
         prev.map(conv =>
-          conv.id === currentConversationId
-            ? { ...conv, messages: [...conv.messages, aiMessage] }
+          conv.id === targetConvId
+            ? { 
+                ...conv, 
+                messages: [...conv.messages, aiMessage],
+                musicInputUnlocked: true // Keep input enabled after first message
+              }
             : conv
         )
       );
@@ -168,8 +227,12 @@ function App() {
       };
       setConversations(prev =>
         prev.map(conv =>
-          conv.id === currentConversationId
-            ? { ...conv, messages: [...conv.messages, errorMessage] }
+          conv.id === targetConvId
+            ? { 
+                ...conv, 
+                messages: [...conv.messages, errorMessage],
+                musicInputUnlocked: true // Keep input enabled even on error
+              }
             : conv
         )
       );
@@ -177,7 +240,12 @@ function App() {
       setIsTyping(false);
     }
 
-    if (selectedCategory !== 'music') setExpandedInput(true);
+    // Keep input active for music after sending message
+    if (selectedCategory === 'music') {
+      setMusicInputActive(true);
+    } else {
+      setExpandedInput(true);
+    }
   };
 
   // ---------------------------
@@ -185,12 +253,35 @@ function App() {
   // ---------------------------
   const handleCategorySelect = (category: string) => {
     setSelectedCategory(category);
-    if (category === 'music') {
-      setMusicInputActive(false);
-      setExpandedInput(false);
+    
+    // Find the first conversation in the selected category
+    const categoryConversations = conversations.filter(c => c.category === category);
+    
+    if (categoryConversations.length > 0) {
+      // Switch to the most recent conversation in this category
+      const mostRecent = categoryConversations[0];
+      setCurrentConversationId(mostRecent.id);
+      
+      if (category === 'music') {
+        // Enable input if conversation has messages OR if musicInputUnlocked is true
+        const shouldEnable = mostRecent.messages.length > 0 || (mostRecent.musicInputUnlocked ?? false);
+        setMusicInputActive(shouldEnable);
+        setExpandedInput(false);
+      } else {
+        setExpandedInput(mostRecent.messages.length > 0);
+        setMusicInputActive(false);
+      }
     } else {
-      setExpandedInput(false);
-      setMusicInputActive(false);
+      // No conversations in this category, clear current conversation
+      setCurrentConversationId(null);
+      
+      if (category === 'music') {
+        setMusicInputActive(false);
+        setExpandedInput(false);
+      } else {
+        setExpandedInput(false);
+        setMusicInputActive(false);
+      }
     }
   };
 
@@ -200,7 +291,9 @@ function App() {
     if (conv) {
       setSelectedCategory(conv.category);
       if (conv.category === 'music') {
-        setMusicInputActive(conv.musicInputUnlocked ?? false);
+        // Enable input if conversation has messages OR if musicInputUnlocked is true
+        const shouldEnable = conv.messages.length > 0 || (conv.musicInputUnlocked ?? false);
+        setMusicInputActive(shouldEnable);
         setExpandedInput(false);
       } else {
         setExpandedInput(conv.messages.length > 0);
@@ -213,7 +306,30 @@ function App() {
   // Suggestion click
   // ---------------------------
   const handleSuggestionClick = (suggestion: string, deselect = false) => {
-    if (!currentConversationId) return;
+    // If no conversation exists, create one first
+    if (!currentConversationId) {
+      const newConvId = Date.now().toString();
+      const newConv: Conversation = {
+        id: newConvId,
+        title: 'New Chat',
+        category: selectedCategory,
+        messages: [],
+        musicInputUnlocked: selectedCategory === 'music' ? !deselect : true,
+        selectedMusicOption: selectedCategory === 'music' ? (deselect ? null : suggestion) : null,
+      };
+
+      setConversations(prev => [newConv, ...prev]);
+      setCurrentConversationId(newConvId);
+
+      if (selectedCategory === 'music') {
+        setMusicInputActive(!deselect);
+      } else {
+        setExpandedInput(true);
+        // Pass the new conversation ID to handleSendMessage
+        handleSendMessage(suggestion, newConvId);
+      }
+      return;
+    }
 
     if (selectedCategory === 'music') {
       setConversations(prev =>
@@ -384,7 +500,6 @@ function App() {
 
   return (
     <div className="h-screen bg-gradient-to-br from-slate-900 via-blue-900 to-slate-900 flex overflow-hidden">
-      <ConnectionTest />
       <Sidebar
         selectedCategory={selectedCategory}
         onCategorySelect={handleCategorySelect}
@@ -395,9 +510,10 @@ function App() {
         onRenameConversation={handleRenameConversation}
         currentConversationId={currentConversationId}
         onOpenAuth={setAuthPage}
+        onSidebarToggle={setIsSidebarOpen}
       />
 
-      <div className="flex-1 flex flex-col transition-all duration-300">
+      <div className="flex-1 flex flex-col transition-all duration-500 ease-in-out">
         <div className="flex-1 overflow-y-auto">
           {currentConversation ? (
             currentConversation.messages.length > 0 ? (
@@ -414,7 +530,7 @@ function App() {
                         <div className="w-2 h-2 bg-white rounded-full animate-bounce delay-200"></div>
                       </div>
                     </div>
-                    <p className="text-slate-400 text-sm font-semibold">COSMOS</p>
+                    <p className="text-slate-400 text-sm font-semibold">CoLab</p>
                   </div>
                 )}
               </div>
@@ -438,8 +554,9 @@ function App() {
           onSend={handleSendMessage}
           disabled={isTyping}
           category={selectedCategory}
-          active={selectedCategory === 'music' ? musicInputActive : undefined}
+          active={selectedCategory === 'music' ? musicInputActive : true}
           resetTrigger={resetTrigger}
+          shouldExpand={currentConversation ? currentConversation.messages.length > 0 : false}
         />
       </div>
     </div>

@@ -5,7 +5,7 @@ import type { User as SupabaseUser, AuthError } from "@supabase/supabase-js";
 interface AuthContextValue {
   user: SupabaseUser | null;
   loading: boolean;
-  signIn: (email: string, password: string) => Promise<{ error: AuthError | null }>;
+  signIn: (email: string, password: string, rememberMe?: boolean) => Promise<{ error: AuthError | null }>;
   signUp: (email: string, password: string) => Promise<{ error: AuthError | null }>;
   signInWithGoogle: () => Promise<{ error: AuthError | null }>;
   resetPassword: (email: string) => Promise<{ error: AuthError | null }>;
@@ -49,9 +49,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
-  // ✅ Fixed signIn
-  const signIn = async (email: string, password: string) => {
-    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+  // ✅ Fixed signIn with Remember Me
+  const signIn = async (email: string, password: string, rememberMe: boolean = true) => {
+    // Set session persistence based on rememberMe
+    await supabase.auth.setSession({
+      access_token: '',
+      refresh_token: '',
+    });
+    
+    const { data, error } = await supabase.auth.signInWithPassword({ 
+      email, 
+      password,
+      options: {
+        // If rememberMe is false, session will expire when browser closes
+        // If true, session persists in localStorage
+        persistSession: rememberMe
+      }
+    });
+    
     if (!error && data?.user) setUser(data.user);
     return { error: error as AuthError | null };
   };

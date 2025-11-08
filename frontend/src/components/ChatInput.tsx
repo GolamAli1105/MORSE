@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Send, Loader2, Mic } from 'lucide-react';
+import { Send, Loader2 } from 'lucide-react';
 
 interface ChatInputProps {
   onSend: (message: string) => void;
@@ -7,6 +7,7 @@ interface ChatInputProps {
   category: string;
   active?: boolean; // controlled by App for music
   resetTrigger?: number; // changes when chat is deleted
+  shouldExpand?: boolean; // whether input should be expanded
 }
 
 export default function ChatInput({
@@ -15,9 +16,11 @@ export default function ChatInput({
   category,
   active = true,
   resetTrigger = 0,
+  shouldExpand = false,
 }: ChatInputProps) {
   const [input, setInput] = useState('');
-  const [expanded, setExpanded] = useState(false);
+  // For design/writing, start expanded if shouldExpand is true
+  const [expanded, setExpanded] = useState(category !== 'music' && shouldExpand);
   const [isActive, setIsActive] = useState(active);
 
   // Update isActive when parent changes (for music)
@@ -29,16 +32,25 @@ export default function ChatInput({
     }
   }, [category, active]);
 
+  // Update expanded state based on shouldExpand prop and category
+  useEffect(() => {
+    if (category === 'music') {
+      // Music: only expand when clicked, not automatically
+      if (!shouldExpand) {
+        setExpanded(false);
+      }
+    } else {
+      // Design/Writing: always keep expanded for easy access
+      // Auto-expand immediately for design/writing tabs
+      setExpanded(true);
+    }
+  }, [shouldExpand, category]);
+
   // Reset on chat delete or resetTrigger
   useEffect(() => {
     setInput('');
-    setExpanded(false);
-    if (category === 'music') {
-      setIsActive(false); // collapsed and inactive
-    } else {
-      setIsActive(true); // active but collapsed
-    }
-  }, [resetTrigger, category]);
+    // Don't reset expanded here - let shouldExpand prop control it
+  }, [resetTrigger]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -52,9 +64,9 @@ export default function ChatInput({
   };
 
   const placeholders = {
-    music: 'Ask about music theory, composition, or recommendations...',
-    design: 'Ask about design principles, color theory, or UI/UX...',
-    writing: 'Ask about writing techniques, storytelling, or content creation...',
+    music: 'What melody is on your mind? 🎵',
+    design: 'Ready to create something beautiful? 🎨',
+    writing: 'What story shall we tell today? ✨',
   };
 
   const handleClick = () => {
@@ -81,7 +93,7 @@ export default function ChatInput({
                   !isActive ? 'opacity-50 cursor-not-allowed' : ''
                 }`}
               >
-                Ask COSMOS
+                Ask CoLab
               </span>
               <button
                 type="button"
@@ -110,14 +122,6 @@ export default function ChatInput({
                 className="flex-1 bg-transparent text-white placeholder-slate-400 px-2 focus:outline-none"
                 autoFocus
               />
-              <button
-                type="button"
-                className="p-3 text-slate-300 hover:text-white transition-colors duration-200"
-                title="Voice input"
-                disabled={!isActive}
-              >
-                <Mic className="w-5 h-5" />
-              </button>
               <button
                 type="submit"
                 disabled={disabled || !input.trim() || !isActive}
