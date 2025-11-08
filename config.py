@@ -33,8 +33,8 @@ class Config:
     
     # Models
     IMAGE_MODEL = os.getenv("IMAGE_MODEL", "stabilityai/stable-diffusion-xl-base-1.0")
-    MUSIC_MODEL = os.getenv("MUSIC_MODEL", "tencent/SongGeneration")
-    TEXT_MODEL = os.getenv("TEXT_MODEL", "gpt2-medium")
+    MUSIC_MODEL = os.getenv("MUSIC_MODEL", "facebook/musicgen-small")  # Fixed: Using working MusicGen
+    TEXT_MODEL = os.getenv("TEXT_MODEL", "microsoft/Phi-3-mini-4k-instruct")  # Lightweight & fast for content
     
     # Device
     DEVICE = os.getenv("DEVICE", "cuda" if os.getenv("CUDA_AVAILABLE") else "cpu")

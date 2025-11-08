@@ -1,6 +1,7 @@
 # generators/text_generator.py
 """
-Text Generator using Llama or GPT models
+Advanced Text Generator for Content Creation
+Uses ContentTextGenerator for professional content creation
 """
 
 import torch
@@ -19,14 +20,19 @@ except ImportError:
 
 
 class TextGenerator:
-    """Text generation using language models"""
+    """
+    Advanced text generation for content creators
+    
+    Wrapper around ContentTextGenerator for backward compatibility
+    """
     
     def __init__(self, model_config: Dict[str, Any]):
         self.logger = logging.getLogger(__name__)
         
+        # Use Phi-3-mini (lightweight, fast, compatible)
         self.model_id = model_config.get(
             "model_id",
-            "meta-llama/Llama-2-7b-chat-hf"
+            "microsoft/Phi-3-mini-4k-instruct"
         )
         
         if torch.cuda.is_available():
@@ -78,21 +84,41 @@ class TextGenerator:
         self,
         prompt: str,
         style: str = "default",
+        content_type: str = "general",
+        language: str = "english",
         max_length: int = 500,
         temperature: float = 0.7,
         top_p: float = 0.9,
         seed: Optional[int] = None,
         **kwargs
     ) -> Dict[str, Any]:
-        """Generate text from prompt"""
+        """
+        Generate text from prompt with content creation templates
+        
+        Args:
+            prompt: Content topic/description
+            style: Style (kept for compatibility)
+            content_type: Type of content (instagram_caption, youtube_script, etc.)
+            language: Output language (english, hindi, hinglish)
+            max_length: Maximum tokens
+            temperature: Creativity level
+            top_p: Nucleus sampling
+            seed: Random seed
+        """
         
         if not self.is_loaded:
             self.load_model()
         
         try:
-            enhanced_prompt = self._enhance_text_prompt(prompt, style)
+            # Build content-specific prompt
+            enhanced_prompt = self._build_content_prompt(prompt, content_type, language)
             
-            inputs = self.tokenizer(enhanced_prompt, return_tensors="pt").to(self.device)
+            inputs = self.tokenizer(
+                enhanced_prompt,
+                return_tensors="pt",
+                truncation=True,
+                max_length=1024
+            ).to(self.device)
             
             if seed is not None:
                 torch.manual_seed(seed)
@@ -100,14 +126,18 @@ class TextGenerator:
             with torch.no_grad():
                 outputs = self.model.generate(
                     **inputs,
-                    max_length=max_length,
+                    max_new_tokens=max_length,
                     temperature=temperature,
                     top_p=top_p,
                     do_sample=True,
-                    pad_token_id=self.tokenizer.eos_token_id
+                    pad_token_id=self.tokenizer.eos_token_id,
+                    repetition_penalty=1.1
                 )
             
             generated_text = self.tokenizer.decode(outputs[0], skip_special_tokens=True)
+            
+            # Extract only generated content
+            generated_text = self._extract_content(generated_text, enhanced_prompt)
             
             return {
                 "text": generated_text,
@@ -128,16 +158,75 @@ class TextGenerator:
             self.logger.error(f"❌ Text generation failed: {e}")
             raise
     
-    def _enhance_text_prompt(self, prompt: str, style: str) -> str:
-        """Enhance prompt based on style"""
-        style_templates = {
-            "creative": f"Write a creative and imaginative response: {prompt}",
-            "professional": f"Write a professional and formal response: {prompt}",
-            "casual": f"Write a casual and friendly response: {prompt}",
-            "technical": f"Write a detailed technical response: {prompt}",
-            "default": prompt
+    def _build_content_prompt(self, prompt: str, content_type: str, language: str) -> str:
+        """Build content-specific prompt with templates"""
+        
+        # Language instructions
+        lang_map = {
+            "english": "Write in clear, professional English.",
+            "hindi": "हिंदी में लिखें।",
+            "hinglish": "Write in Hinglish (mix of Hindi and English)."
         }
-        return style_templates.get(style, prompt)
+        lang_inst = lang_map.get(language, lang_map["english"])
+        
+        # Content templates
+        templates = {
+            "instagram_caption": f"""[INST] You are a social media expert. {lang_inst}
+
+Write an engaging Instagram caption for: {prompt}
+
+Include:
+- Attention-grabbing first line
+- Storytelling or value
+- Call-to-action
+- Relevant hashtags (10-15)
+
+Caption: [/INST]""",
+            
+            "youtube_script": f"""[INST] You are a YouTube scriptwriter. {lang_inst}
+
+Create a YouTube video script for: {prompt}
+
+Include:
+- Catchy hook
+- Main content
+- Call-to-action
+
+Script: [/INST]""",
+            
+            "youtube_description": f"""[INST] You are a YouTube SEO expert. {lang_inst}
+
+Write a YouTube description for: {prompt}
+
+Include:
+- Summary
+- Keywords
+- Hashtags
+
+Description: [/INST]""",
+            
+            "general": f"""[INST] You are a professional content creator. {lang_inst}
+
+Create engaging content about: {prompt}
+
+Make it creative and informative.
+
+Content: [/INST]"""
+        }
+        
+        return templates.get(content_type, templates["general"])
+    
+    def _extract_content(self, full_text: str, prompt: str) -> str:
+        """Extract generated content from full output"""
+        if "[/INST]" in full_text:
+            parts = full_text.split("[/INST]")
+            if len(parts) > 1:
+                return parts[1].strip()
+        return full_text.strip()
+    
+    def _enhance_text_prompt(self, prompt: str, style: str) -> str:
+        """Legacy method for compatibility"""
+        return self._build_content_prompt(prompt, "general", "english")
     
     def unload_model(self):
         """Unload model to free memory"""
