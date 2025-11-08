@@ -1,3 +1,12 @@
+🧠 CoLab: The Generative AI Partner for Smart Creation
+Track: Generative AI
+Problem Statement: Generative Co-Pilot for Everyday Creators
+👥 Team MORSE
+Name	Role
+Avirup Dasgupta	Team Lead
+Susovan Patra	Member
+Golam Ali	Member
+Sankalan Samanta	Member
 🚀 Overview
 
 CoLab is an intelligent Generative AI Co-Pilot designed to empower everyday creators. It adapts to each user's unique creative style and assists in generating text, images, and audio effortlessly.
@@ -62,5 +71,3 @@ Designers & Marketers
 Startups & Small Businesses
 
 Educators & Students
-
-🙏 Acknowledgment
