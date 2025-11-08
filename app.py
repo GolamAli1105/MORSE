@@ -82,6 +82,35 @@ text_gen = TextGenerator(Config.get_model_config("text"))
 
 logger.info("✅ All components initialized")
 
+# Preload all models at startup
+logger.info("📥 Preloading all models...")
+
+# Load Text Generator first (smallest and fastest)
+try:
+    logger.info("Loading Text Generator...")
+    text_gen.load_model()
+    logger.info("✅ Text Generator loaded")
+except Exception as e:
+    logger.error(f"❌ Failed to load Text Generator: {e}")
+
+# Load Music Generator second
+try:
+    logger.info("Loading Music Generator...")
+    music_gen.load_model()
+    logger.info("✅ Music Generator loaded")
+except Exception as e:
+    logger.error(f"❌ Failed to load Music Generator: {e}")
+
+# Load Image Generator last (largest)
+try:
+    logger.info("Loading Image Generator (SDXL)...")
+    image_gen.load_model()
+    logger.info("✅ Image Generator loaded")
+except Exception as e:
+    logger.error(f"❌ Failed to load Image Generator: {e}")
+
+logger.info("🎉 All models preloaded and ready!")
+
 
 # WebSocket Connection Manager for Real-time Updates
 class ConnectionManager:
@@ -147,6 +176,39 @@ class FineTuneRequest(BaseModel):
 
 
 # API Endpoints
+@app.get("/")
+async def root():
+    """Root endpoint - Welcome page"""
+    return {
+        "message": "🚀 Welcome to Generative Copilot API",
+        "version": "2.0.0",
+        "status": "running",
+        "documentation": "/docs",
+        "endpoints": {
+            "health": "/health",
+            "config": "/config",
+            "generate": "/generate",
+            "feedback": {
+                "explicit": "/feedback/explicit",
+                "implicit": "/feedback/implicit"
+            },
+            "finetune": {
+                "start": "/finetune/start",
+                "status": "/finetune/status/{job_id}"
+            },
+            "user": {
+                "stats": "/user/{user_id}/stats",
+                "best_content": "/user/{user_id}/best-content/{modality}"
+            },
+            "streaming": {
+                "generate": "/generate/stream",
+                "websocket": "/ws"
+            }
+        },
+        "features": ["RAG", "MongoDB", "Fine-tuning", "Multi-modal", "WebSocket", "Streaming"]
+    }
+
+
 @app.post("/generate")
 async def generate_content(request: GenerateRequest):
     """
@@ -231,7 +293,7 @@ async def generate_content(request: GenerateRequest):
             generation_params=result.get('parameters', {})
         )
         
-        # Step 5: Prepare response
+        # Step 5: Prepare response (remove non-serializable objects)
         response = {
             **result,
             "generation_id": generation_id,
@@ -240,6 +302,14 @@ async def generate_content(request: GenerateRequest):
             "rag_enhanced": request.use_rag,
             "rag_info": rag_result if rag_result else None
         }
+        
+        # Remove PIL Image object if present (not JSON serializable)
+        if 'image_pil' in response:
+            del response['image_pil']
+        
+        # Remove numpy arrays if present (not JSON serializable)
+        if 'audio_array' in response:
+            del response['audio_array']
         
         logger.info(f"✅ Generation complete: {generation_id}")
         return response
@@ -446,6 +516,12 @@ async def health_check():
     }
 
 
+@app.get("/favicon.ico")
+async def favicon():
+    """Favicon endpoint to prevent 404 errors"""
+    return JSONResponse(content={}, status_code=204)
+
+
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
     """
@@ -619,12 +695,16 @@ async def shutdown_event():
 
 
 if __name__ == "__main__":
-    # Create default user
-    try:
-        user_id = db.create_user("demo_user", "demo@example.com")
-        logger.info(f"✅ Created demo user: {user_id}")
-    except:
-        logger.info("Demo user already exists")
+    # Create default user if not exists
+    existing_user = db.get_user("demo_user")
+    if not existing_user:
+        try:
+            user_id = db.create_user("demo_user", "demo@example.com")
+            logger.info(f"✅ Created demo user: {user_id}")
+        except Exception as e:
+            logger.warning(f"Could not create demo user: {e}")
+    else:
+        logger.info("✅ Demo user ready")
     
     # Start server
     logger.info("🚀 Starting Generative Copilot API...")

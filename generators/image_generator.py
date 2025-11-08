@@ -19,11 +19,11 @@ logger = logging.getLogger(__name__)
 
 # Try to import diffusers, fall back gracefully
 try:
-    from diffusers import FluxPipeline
+    from diffusers import StableDiffusionXLPipeline, FluxPipeline
     DIFFUSERS_AVAILABLE = True
 except ImportError:
     DIFFUSERS_AVAILABLE = False
-    logger.warning("Diffusers not available - FLUX generator will use fallback")
+    logger.warning("Diffusers not available - Image generator will use fallback")
 
 
 class ImageGenerator:
@@ -55,8 +55,12 @@ class ImageGenerator:
         # Model configuration
         self.model_id = model_config.get(
             "model_id", 
-            "black-forest-labs/FLUX.1-schnell"
+            "stabilityai/stable-diffusion-xl-base-1.0"
         )
+        
+        # Detect model type
+        self.is_flux = "flux" in self.model_id.lower()
+        self.is_sdxl = "stable-diffusion-xl" in self.model_id.lower() or "sdxl" in self.model_id.lower()
         
         # Device setup - auto-detect if not specified
         if torch.cuda.is_available():
@@ -75,9 +79,13 @@ class ImageGenerator:
         self.pipeline = None
         self.is_loaded = False
         
-        # Generation defaults
-        self.default_steps = 4  # FLUX.1-schnell is optimized for 1-4 steps
-        self.default_guidance_scale = 0.0  # FLUX.1-schnell doesn't use guidance
+        # Generation defaults based on model type
+        if self.is_flux:
+            self.default_steps = 4  # FLUX.1-schnell is optimized for 1-4 steps
+            self.default_guidance_scale = 0.0  # FLUX.1-schnell doesn't use guidance
+        else:
+            self.default_steps = 30  # SDXL uses more steps
+            self.default_guidance_scale = 7.5  # SDXL uses guidance
         
         self.logger.info(f"✅ FLUX Image Generator initialized (model: {self.model_id})")
     
@@ -101,12 +109,27 @@ class ImageGenerator:
             
             start_time = time.time()
             
-            # Load the pipeline
-            self.pipeline = FluxPipeline.from_pretrained(
-                self.model_id,
-                torch_dtype=self.torch_dtype,
-                use_safetensors=True  # Use safetensors for security
-            )
+            # Get HuggingFace token from environment
+            import os
+            hf_token = os.getenv("HUGGINGFACE_TOKEN")
+            
+            # Load the appropriate pipeline based on model type
+            if self.is_flux:
+                self.pipeline = FluxPipeline.from_pretrained(
+                    self.model_id,
+                    torch_dtype=self.torch_dtype,
+                    use_safetensors=True,
+                    token=hf_token
+                )
+            else:
+                # Use SDXL or other Stable Diffusion models
+                self.pipeline = StableDiffusionXLPipeline.from_pretrained(
+                    self.model_id,
+                    torch_dtype=self.torch_dtype,
+                    use_safetensors=True,
+                    token=hf_token,
+                    variant="fp16" if self.torch_dtype == torch.float16 else None
+                )
             
             # Move to device
             if self.device == "cuda":
@@ -177,8 +200,11 @@ class ImageGenerator:
             width = (width // 8) * 8
             height = (height // 8) * 8
             
-            # Clamp steps to recommended range for schnell
-            num_inference_steps = max(1, min(num_inference_steps, 4))
+            # Clamp steps based on model type
+            if self.is_flux:
+                num_inference_steps = max(1, min(num_inference_steps, 4))
+            else:
+                num_inference_steps = max(10, min(num_inference_steps, 50))
             
             self.logger.info(f"🎨 Generating image: {enhanced_prompt[:50]}...")
             
@@ -187,16 +213,28 @@ class ImageGenerator:
             if seed is not None:
                 generator = torch.Generator(device=self.device).manual_seed(seed)
             
-            # Generate image
-            # FLUX.1-schnell doesn't use guidance_scale, so we don't pass it
-            result = self.pipeline(
-                prompt=enhanced_prompt,
-                width=width,
-                height=height,
-                num_inference_steps=num_inference_steps,
-                generator=generator,
-                output_type="pil"
-            )
+            # Generate image with appropriate parameters
+            if self.is_flux:
+                # FLUX doesn't use guidance_scale
+                result = self.pipeline(
+                    prompt=enhanced_prompt,
+                    width=width,
+                    height=height,
+                    num_inference_steps=num_inference_steps,
+                    generator=generator,
+                    output_type="pil"
+                )
+            else:
+                # SDXL and other models use guidance_scale
+                guidance_scale = kwargs.get('guidance_scale', self.default_guidance_scale)
+                result = self.pipeline(
+                    prompt=enhanced_prompt,
+                    width=width,
+                    height=height,
+                    num_inference_steps=num_inference_steps,
+                    guidance_scale=guidance_scale,
+                    generator=generator
+                )
             
             # Get the generated image
             image = result.images[0]

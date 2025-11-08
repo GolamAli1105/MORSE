@@ -21,7 +21,7 @@ except ImportError:
 
 class MusicGenerator:
     """
-    SongBloom Music Generator
+    Tencent SongGeneration Music Generator
     
     Key Features:
     - Text-to-music generation
@@ -30,7 +30,7 @@ class MusicGenerator:
     - Controllable duration
     - High-quality audio output
     
-    Model: CypressYang/SongBloom
+    Model: tencent/SongGeneration
     """
     
     def __init__(self, model_config: Dict[str, Any]):
@@ -46,14 +46,11 @@ class MusicGenerator:
         """
         self.logger = logging.getLogger(__name__)
         
-        # Model configuration
+        # Model configuration - Using Tencent SongGeneration
         self.model_id = model_config.get(
             "model_id",
-            "facebook/musicgen-small"  # Fallback to musicgen if SongBloom not available
+            "tencent/SongGeneration"
         )
-        
-        # Try SongBloom first, fall back to MusicGen
-        self.songbloom_id = "CypressYang/SongBloom"
         
         # Device setup
         if torch.cuda.is_available():
@@ -74,7 +71,7 @@ class MusicGenerator:
         self.processor = None
         self.is_loaded = False
         
-        self.logger.info(f"✅ SongBloom Music Generator initialized")
+        self.logger.info(f"✅ Tencent SongGeneration Music Generator initialized")
     
     def load_model(self):
         """
@@ -96,24 +93,22 @@ class MusicGenerator:
             self.logger.info(f"📥 Loading music generation model...")
             start_time = time.time()
             
-            # Try to load SongBloom, fall back to MusicGen
-            try:
-                self.logger.info(f"Attempting to load {self.songbloom_id}...")
-                self.processor = AutoProcessor.from_pretrained(self.songbloom_id)
-                self.model = MusicgenForConditionalGeneration.from_pretrained(
-                    self.songbloom_id,
-                    torch_dtype=self.torch_dtype
-                )
-                self.model_name = "SongBloom"
-                self.logger.info("✅ SongBloom model loaded")
-            except Exception as e:
-                self.logger.warning(f"SongBloom not available ({e}), using MusicGen")
-                self.processor = AutoProcessor.from_pretrained(self.model_id)
-                self.model = MusicgenForConditionalGeneration.from_pretrained(
-                    self.model_id,
-                    torch_dtype=self.torch_dtype
-                )
-                self.model_name = "MusicGen"
+            # Get HuggingFace token from environment
+            import os
+            hf_token = os.getenv("HUGGINGFACE_TOKEN")
+            
+            # Load Tencent SongGeneration model
+            self.logger.info(f"Loading Tencent SongGeneration model: {self.model_id}...")
+            
+            self.processor = AutoProcessor.from_pretrained(self.model_id, token=hf_token)
+            self.model = MusicgenForConditionalGeneration.from_pretrained(
+                self.model_id,
+                torch_dtype=self.torch_dtype,
+                token=hf_token
+            )
+            
+            self.model_name = "Tencent SongGeneration"
+            self.logger.info(f"✅ {self.model_name} loaded successfully")
             
             # Move to device
             self.model = self.model.to(self.device)

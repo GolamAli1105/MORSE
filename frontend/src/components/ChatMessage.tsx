@@ -5,6 +5,53 @@ interface ChatMessageProps {
   content: string;
 }
 
+// Helper function to render content with images and audio
+function renderContent(content: string) {
+  // Check if content contains image markdown
+  const imageMatch = content.match(/!\[.*?\]\((data:image\/[^)]+)\)/);
+  if (imageMatch) {
+    const imageData = imageMatch[1];
+    const textBefore = content.substring(0, imageMatch.index);
+    const textAfter = content.substring((imageMatch.index || 0) + imageMatch[0].length);
+    
+    return (
+      <>
+        {textBefore && <p className="mb-3">{textBefore}</p>}
+        <img 
+          src={imageData} 
+          alt="Generated" 
+          className="rounded-lg max-w-full h-auto shadow-lg"
+          style={{ maxHeight: '512px' }}
+        />
+        {textAfter && <p className="mt-3">{textAfter}</p>}
+      </>
+    );
+  }
+
+  // Check if content contains audio HTML
+  const audioMatch = content.match(/<audio[^>]*src="([^"]+)"[^>]*><\/audio>/);
+  if (audioMatch) {
+    const audioData = audioMatch[1];
+    const textBefore = content.substring(0, audioMatch.index);
+    const textAfter = content.substring((audioMatch.index || 0) + audioMatch[0].length);
+    
+    return (
+      <>
+        {textBefore && <p className="mb-3 whitespace-pre-wrap">{textBefore}</p>}
+        <audio 
+          controls 
+          src={audioData}
+          className="w-full max-w-md rounded-lg"
+        />
+        {textAfter && <p className="mt-3">{textAfter}</p>}
+      </>
+    );
+  }
+
+  // Regular text content
+  return content;
+}
+
 export default function ChatMessage({ role, content }: ChatMessageProps) {
   const isAssistant = role === 'assistant';
 
@@ -46,7 +93,7 @@ export default function ChatMessage({ role, content }: ChatMessageProps) {
               : '18px 0px 18px 18px', // USER bubble (flat top-right corner)
           }}
         >
-          {content}
+          {renderContent(content)}
         </div>
       </div>
 

@@ -32,9 +32,9 @@ class Config:
     MONGODB_DB_NAME = os.getenv("MONGODB_DB_NAME", "generative_copilot")
     
     # Models
-    IMAGE_MODEL = os.getenv("IMAGE_MODEL", "black-forest-labs/FLUX.1-schnell")
-    MUSIC_MODEL = os.getenv("MUSIC_MODEL", "facebook/musicgen-small")
-    TEXT_MODEL = os.getenv("TEXT_MODEL", "mistralai/Mistral-7B-Instruct-v0.2")
+    IMAGE_MODEL = os.getenv("IMAGE_MODEL", "stabilityai/stable-diffusion-xl-base-1.0")
+    MUSIC_MODEL = os.getenv("MUSIC_MODEL", "tencent/SongGeneration")
+    TEXT_MODEL = os.getenv("TEXT_MODEL", "gpt2-medium")
     
     # Device
     DEVICE = os.getenv("DEVICE", "cuda" if os.getenv("CUDA_AVAILABLE") else "cpu")

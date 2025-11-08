@@ -10,6 +10,7 @@ import { SignupPage } from './pages/SignupPage';
 import { ForgotPasswordPage } from './pages/ForgotPasswordPage';
 import { ResetPasswordPage } from './pages/ResetPasswordPage';
 import { AuthCallback } from './pages/AuthCallback';
+import { ConnectionTest } from './components/ConnectionTest';
 
 interface Message {
   id: string;
@@ -86,8 +87,8 @@ function App() {
   // ---------------------------
   // Handle sending messages
   // ---------------------------
-  const handleSendMessage = (content: string) => {
-    if (!currentConversationId) return;
+  const handleSendMessage = async (content: string) => {
+    if (!currentConversationId || !user) return;
 
     const userMessage: Message = { id: Date.now().toString(), role: 'user', content };
 
@@ -109,12 +110,48 @@ function App() {
     );
 
     setIsTyping(true);
-    setTimeout(() => {
+
+    try {
+      // Map category to modality
+      const modality = selectedCategory === 'music' ? 'music' : 
+                       selectedCategory === 'design' ? 'image' : 'text';
+
+      // Call the backend API
+      const response = await fetch('http://localhost:8000/generate', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          user_id: user.id,
+          modality: modality,
+          prompt: content,
+          style: 'default',
+          use_rag: false,
+          parameters: modality === 'image' ? { num_inference_steps: 30 } : 
+                      modality === 'music' ? { duration: 15 } : 
+                      { max_length: 200 }
+        }),
+      });
+
+      const data = await response.json();
+
+      // Format the response based on modality
+      let aiContent = '';
+      if (modality === 'text') {
+        aiContent = data.text || 'Generated text content';
+      } else if (modality === 'image') {
+        aiContent = `![Generated Image](data:image/png;base64,${data.image_data})`;
+      } else if (modality === 'music') {
+        aiContent = `🎵 Music generated successfully!\n\n<audio controls src="data:audio/wav;base64,${data.audio_data}"></audio>`;
+      }
+
       const aiMessage: Message = {
         id: (Date.now() + 1).toString(),
         role: 'assistant',
-        content: simulateAIResponse(content, selectedCategory),
+        content: aiContent,
       };
+
       setConversations(prev =>
         prev.map(conv =>
           conv.id === currentConversationId
@@ -122,10 +159,25 @@ function App() {
             : conv
         )
       );
+    } catch (error) {
+      console.error('Generation failed:', error);
+      const errorMessage: Message = {
+        id: (Date.now() + 1).toString(),
+        role: 'assistant',
+        content: '❌ Sorry, generation failed. Please try again.',
+      };
+      setConversations(prev =>
+        prev.map(conv =>
+          conv.id === currentConversationId
+            ? { ...conv, messages: [...conv.messages, errorMessage] }
+            : conv
+        )
+      );
+    } finally {
       setIsTyping(false);
-    }, 1500);
+    }
 
-    if (selectedCategory !== 'music') setExpandedInput(true); // expand design/writing input
+    if (selectedCategory !== 'music') setExpandedInput(true);
   };
 
   // ---------------------------
@@ -332,6 +384,7 @@ function App() {
 
   return (
     <div className="h-screen bg-gradient-to-br from-slate-900 via-blue-900 to-slate-900 flex overflow-hidden">
+      <ConnectionTest />
       <Sidebar
         selectedCategory={selectedCategory}
         onCategorySelect={handleCategorySelect}

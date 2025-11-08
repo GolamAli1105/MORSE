@@ -53,12 +53,19 @@ class TextGenerator:
         try:
             self.logger.info(f"📥 Loading {self.model_id}...")
             
-            self.tokenizer = AutoTokenizer.from_pretrained(self.model_id)
+            # Get HuggingFace token from environment
+            import os
+            hf_token = os.getenv("HUGGINGFACE_TOKEN")
+            
+            self.tokenizer = AutoTokenizer.from_pretrained(self.model_id, token=hf_token)
             self.model = AutoModelForCausalLM.from_pretrained(
                 self.model_id,
                 torch_dtype=self.torch_dtype,
-                device_map="auto"
+                token=hf_token
             )
+            
+            # Move model to device
+            self.model = self.model.to(self.device)
             
             self.is_loaded = True
             self.logger.info(f"✅ Text model loaded")
