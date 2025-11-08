@@ -12,7 +12,7 @@ import {
   ChevronLeft,
   MoreHorizontal,
 } from 'lucide-react';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import ProfileModal from './ProfileModal';
 
@@ -28,6 +28,7 @@ interface SidebarProps {
   conversations: Conversation[];
   onNewChat: () => void;
   onConversationSelect: (id: string) => void;
+  onSidebarToggle?: (isOpen: boolean) => void;
   onDeleteConversation: (id: string) => void;
   onRenameConversation: (id: string, newTitle: string) => void;
   currentConversationId: string | null;
@@ -44,6 +45,7 @@ export default function Sidebar({
   onRenameConversation,
   currentConversationId,
   onOpenAuth,
+  onSidebarToggle,
 }: SidebarProps) {
   const [showCategories, setShowCategories] = useState(true);
   const [showChats, setShowChats] = useState(true);
@@ -56,7 +58,30 @@ export default function Sidebar({
   const [editingConversationId, setEditingConversationId] = useState<string | null>(null);
   const [tempTitle, setTempTitle] = useState('');
 
-  const toggleSidebar = () => setIsSidebarOpen(!isSidebarOpen);
+  // Close menu when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as HTMLElement;
+      // Check if click is outside the menu
+      if (openMenuId && !target.closest('.menu-container')) {
+        setOpenMenuId(null);
+      }
+    };
+
+    if (openMenuId) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [openMenuId]);
+
+  const toggleSidebar = () => {
+    const newState = !isSidebarOpen;
+    setIsSidebarOpen(newState);
+    onSidebarToggle?.(newState);
+  };
 
   const categories = [
     { id: 'music', label: 'Music', icon: Music, color: 'text-pink-400' },
@@ -79,9 +104,9 @@ export default function Sidebar({
 
       {/* Sidebar container */}
       <div
-        className={`fixed md:static top-0 left-0 h-full z-40 transform transition-transform duration-300 ease-in-out ${
-          isSidebarOpen ? 'translate-x-0' : '-translate-x-full'
-        } w-64 bg-slate-900 border-r border-slate-800 flex flex-col`}
+        className={`fixed md:relative top-0 left-0 h-full z-40 bg-slate-900 border-r border-slate-800 flex flex-col transition-all duration-500 ease-in-out ${
+          isSidebarOpen ? 'w-64 md:w-64' : 'w-0 md:w-0 -ml-64 md:-ml-0'
+        } overflow-hidden`}
       >
         {/* Header */}
         <div className="p-6 border-b border-slate-800">
@@ -92,7 +117,7 @@ export default function Sidebar({
                 <div className="absolute inset-0 blur-lg bg-blue-500 opacity-30"></div>
               </div>
               <div>
-                <h1 className="text-xl font-bold text-white">COSMOS</h1>
+                <h1 className="text-xl font-bold text-white">CoLab</h1>
                 <p className="text-xs text-slate-400">AI Assistant</p>
               </div>
             </div>
@@ -220,7 +245,7 @@ export default function Sidebar({
                     </button>
 
                     {/* 3-dot menu */}
-                    <div className="relative">
+                    <div className="relative menu-container">
                       <button
                         onClick={(e) => {
                           e.stopPropagation();

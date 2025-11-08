@@ -61,7 +61,7 @@ export default function ChatMessage({ role, content }: ChatMessageProps) {
         isAssistant ? 'justify-start' : 'justify-end'
       }`}
     >
-      {/* COSMOS avatar on the left */}
+      {/* CoLab avatar on the left */}
       {isAssistant && (
         <div className="w-10 h-10 rounded-full flex items-center justify-center bg-gradient-to-br from-blue-500 to-cyan-400 flex-shrink-0">
           <Sparkles className="w-5 h-5 text-white" />
@@ -75,7 +75,7 @@ export default function ChatMessage({ role, content }: ChatMessageProps) {
         } max-w-[80%]`}
       >
         <p className="text-slate-400 text-sm font-semibold mb-1">
-          {isAssistant ? 'COSMOS' : 'You'}
+          {isAssistant ? 'CoLab' : 'You'}
         </p>
 
         <div
@@ -89,7 +89,7 @@ export default function ChatMessage({ role, content }: ChatMessageProps) {
             overflowWrap: 'break-word',
             whiteSpace: 'pre-wrap',
             borderRadius: isAssistant
-              ? '18px 18px 18px 0px' // COSMOS (normal)
+              ? '18px 18px 18px 0px' // CoLab (normal)
               : '18px 0px 18px 18px', // USER bubble (flat top-right corner)
           }}
         >

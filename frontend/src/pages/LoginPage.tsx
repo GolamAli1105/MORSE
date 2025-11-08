@@ -66,7 +66,7 @@ export const LoginPage = () => {
     }
 
     try {
-      const { error } = await signIn(email, password);
+      const { error } = await signIn(email, password, rememberMe);
       if (error) setError(error.message);
     } catch {
       setError('An unexpected error occurred. Please try again.');

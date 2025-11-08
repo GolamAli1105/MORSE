@@ -34,7 +34,7 @@ export default function LoadingScreen({ onLoadingComplete }: LoadingScreenProps)
         </div>
 
         <h1 className="text-6xl font-bold text-white mb-4 animate-fade-in">
-          COSMOS
+          CoLab
         </h1>
 
         <p className="text-blue-300 text-lg mb-8 animate-fade-in-delay">
